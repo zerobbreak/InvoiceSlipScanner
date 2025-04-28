@@ -44,7 +44,7 @@ const HomeScreen: React.FC = () => {
       </View>
 
       {/* Content */}
-      <ScrollView contentContainerStyle={styles.contentContainer}>
+      <View style={styles.contentContainer}>
         {/* Quick Stats */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Quick Stats</Text>
@@ -66,13 +66,14 @@ const HomeScreen: React.FC = () => {
           <Text style={styles.sectionTitle}>Actions</Text>
           <View style={styles.gridContainer}>
             {homeCards.map((item, index) =>
-              HomeCard(
-                item.route,
-                item.icon,
-                item.title,
-                item.description,
-                item.sec_description
-              )
+              <HomeCard
+                key={index}
+                href={item.route}
+                icon={item.icon}
+                title={item.title}
+                subtitle={item.description}
+                accessibilityLabel={`Go to ${item.title}`}
+              />
             )}
           </View>
         </View>
@@ -87,7 +88,7 @@ const HomeScreen: React.FC = () => {
             showsVerticalScrollIndicator={false}
           />
         </View>
-      </ScrollView>
+      </View>
 
       {/* FAB for Quick Scan */}
       <TouchableOpacity
@@ -159,7 +160,9 @@ const styles = StyleSheet.create({
   gridContainer: {
     flexDirection: "row",
     flexWrap: "wrap",
-    justifyContent: "space-between",
+    // justifyContent: "space-between",
+    justifyContent: "flex-start",
+    gap: 12,
   },
   fab: {
     position: "absolute",

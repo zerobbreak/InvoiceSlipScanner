@@ -13,12 +13,20 @@ import { Link } from "expo-router";
 const { width } = Dimensions.get("window");
 const CARD_WIDTH = (width - 60) / 2;
 
-const HomeCard = (
-  href: any,
-  icon: any,
-  title: string,
-  subtitle: string,
-  accessibilityLabel: string
+interface HomeCardProps {
+  key: number
+  href: any;
+  icon: any;
+  title: string;
+  subtitle: string;
+  accessibilityLabel: string;
+}
+const HomeCard = ({
+  href,
+  icon,
+  title,
+  subtitle,
+  accessibilityLabel} : HomeCardProps
 ) => {
   const scaleValue = new Animated.Value(1);
   const opacityValue = new Animated.Value(1);

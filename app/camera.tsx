@@ -12,132 +12,141 @@ import {
 import {
   Camera,
   CameraView,
-  FlashMode,
   useCameraPermissions,
 } from "expo-camera";
 import { Ionicons } from "@expo/vector-icons";
-// import { processOCR, validateReceipt, computeImageHash } from './ocrUtils';
-// import { databases, DATABASE_ID, COLLECTION_ID } from './appwriteConfig';
-import { ID, Query } from "appwrite";
+import { databases, DATABASE_ID, COLLECTION_ID, client, } from "../appwriteConfig";
+import { ID, Query, Storage } from "react-native-appwrite";
 import { useNavigation } from "expo-router";
+import { computeImageHash, processOCR } from "@/utils";
 
 const CameraScreen = () => {
   const navigation = useNavigation();
+  const storage = new Storage(client);
   const [permission, setHasPermission] = useCameraPermissions();
-  const [isScanning, setIsScanning] = useState<boolean>(false);
-  const [flashOn, setFlashOn] = useState<boolean>(false);
+  const [isScanning, setIsScanning] = useState(false);
   const [validationError, setValidationError] = useState<string | null>(null);
-  const [processingStatus, setProcessingStatus] = useState<string>("");
+  const [processingStatus, setProcessingStatus] = useState("");
+  //@ts-ignore
   const cameraRef = useRef<Camera>(null);
 
   // Request camera permissions
   if (!permission) {
-    // Camera permissions are still loading.
     return <View />;
   }
 
   if (!permission.granted) {
-    // Camera permissions are not granted yet.
     return (
       <View style={styles.container}>
-        <Text style={styles.message}>
-          We need your permission to show the camera
-        </Text>
-        <Button onPress={setHasPermission} title="grant permission" />
+        <Text style={styles.message}>We need your permission to show the camera</Text>
+        <Button onPress={setHasPermission} title="Grant Permission" />
       </View>
     );
   }
 
-    const captureImage = async () => {
-      if (cameraRef.current && !isScanning) {
-        try {
-          setIsScanning(true);
-          setValidationError(null);
-          setProcessingStatus('Capturing image...');
+  const captureImage = async () => {
+    if (cameraRef.current && !isScanning) {
+      try {
+        setIsScanning(true);
+        setValidationError(null);
+        setProcessingStatus("Capturing image...");
 
-          const data = await cameraRef.current.takePictureAsync({
-            quality: 0.8,
-            base64: true,
-          });
+        const data = await cameraRef.current.takePictureAsync({
+          quality: 0.8,
+          base64: true,
+        });
 
-          // Check for duplicate scan
-          setProcessingStatus('Checking for duplicates...');
-          const imageHash = await computeImageHash(data.uri);
-          const existingDoc = await databases.listDocuments(DATABASE_ID, COLLECTION_ID, [
-            Query.equal('imageHash', imageHash),
-          ]);
+        setProcessingStatus("Checking for duplicates...");
+        const imageHash = await computeImageHash(data.uri);
+        const existingDoc = await databases.listDocuments(DATABASE_ID, COLLECTION_ID.DOCUMENTS, [
+          Query.equal("imageHash", imageHash),
+        ]);
 
-          if (existingDoc.documents.length > 0) {
-            Alert.alert(
-              'Duplicate Scan Detected',
-              'This image appears to be a duplicate. Do you want to update or cancel?',
-              [
-                { text: 'Cancel', onPress: () => setIsScanning(false) },
-                {
-                  text: 'Update',
-                  onPress: async () => {
-                    await processAndNavigate(data.uri, imageHash, existingDoc.documents[0].$id);
-                  },
+        if (existingDoc.documents.length > 0) {
+          Alert.alert(
+            "Duplicate Scan Detected",
+            "This image appears to be a duplicate. Do you want to update or cancel?",
+            [
+              { text: "Cancel", onPress: () => setIsScanning(false) },
+              {
+                text: "Update",
+                onPress: async () => {
+                  await processAndNavigate(data.uri, imageHash, existingDoc.documents[0].$id);
                 },
-              ]
-            );
-            setIsScanning(false);
-            return;
-          }
-
-          await processAndNavigate(data.uri, imageHash);
-        } catch (error) {
-          console.error('Capture failed:', error);
-          Alert.alert('Error', 'Failed to capture image. Please try again.');
+              },
+            ]
+          );
           setIsScanning(false);
-          setProcessingStatus('');
+          return;
         }
+
+        await processAndNavigate(data.uri, imageHash, null);
+      } catch (error) {
+        console.error("Capture failed:", error);
+        Alert.alert("Error", "Failed to capture image. Please try again.");
+        setIsScanning(false);
+        setProcessingStatus("");
       }
-    };
-
-  //   const processAndNavigate = async (imageUri: string, imageHash: string, existingDocId?: string) => {
-  //     try {
-  //       setProcessingStatus('Processing image...');
-  //       const ocrData = await processOCR(imageUri);
-
-  //       setProcessingStatus(`Receipt validated (${ocrData.confidence}% confidence)`);
-  //       if (!ocrData.isValid) {
-  //         setValidationError(`This doesn't appear to be a receipt (${ocrData.confidence}% confidence). Please try again.`);
-  //         setIsScanning(false);
-  //         return;
-  //       }
-
-  //       // Store or update in Appwrite
-  //       if (existingDocId) {
-  //         await databases.updateDocument(DATABASE_ID, COLLECTION_ID, existingDocId, {
-  //           imageUri,
-  //           imageHash,
-  //           ocrData: JSON.stringify(ocrData),
-  //           updatedAt: new Date().toISOString(),
-  //         });
-  //       } else {
-  //         await databases.createDocument(DATABASE_ID, COLLECTION_ID, ID.unique(), {
-  //           imageUri,
-  //           imageHash,
-  //           ocrData: JSON.stringify(ocrData),
-  //           createdAt: new Date().toISOString(),
-  //         });
-  //       }
-
-  //       setTimeout(() => {
-  //         setIsScanning(false);
-  //         navigation.navigate('Review', { imageUri, ocrData });
-  //       }, 1000);
-  //     } catch (error) {
-  //       console.error('OCR processing failed:', error);
-  //       setValidationError('OCR processing failed. Please try again.');
-  //       setIsScanning(false);
-  //     }
-  //   };
-
-  const toggleFlash = () => {
-    setFlashOn((prev) => !prev);
+    }
   };
+
+  //@ts-ignore
+  const processAndNavigate = async (imageUri, imageHash, existingDocId) => {
+    try {
+      setProcessingStatus("Processing image...");
+      const ocrData = await processOCR(imageUri);
+
+      setProcessingStatus(`Receipt validated (${ocrData.confidence}% confidence)`);
+      if (!ocrData.isValid) {
+        setValidationError(
+          `This doesn't appear to be a receipt (${ocrData.confidence}% confidence). Please try again.`
+        );
+        setIsScanning(false);
+        return;
+      }
+
+      const ocrFile = await storage.createFile(
+        "680f67ef002610778583", 
+        ID.unique(), 
+        //@ts-ignore
+        new Blob([JSON.stringify(ocrData)], { type: "application/json"})
+      );
+      const documentData = {
+        imageUri,
+        imageHash,
+        ocrData: JSON.stringify(ocrData),
+        tags: [new Date().toISOString().split("T")[0]], // Auto-tag with date
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        categoryId: "680e934400337dc334b2",
+        budgetId: "680e930e003d3b8e731e",
+      };
+
+      if (existingDocId) {
+        await databases.updateDocument(DATABASE_ID, COLLECTION_ID.DOCUMENTS, existingDocId, documentData);
+      } else {
+        await databases.createDocument(DATABASE_ID, COLLECTION_ID.DOCUMENTS, ID.unique(), documentData);
+      }
+
+      setTimeout(() => {
+        setIsScanning(false);
+        //@ts-ignore
+        navigation.navigate("Review", {
+          imageUri,
+          ocrData,
+          imageHash,
+          existingDocId,
+          budgetId: "680e934400337dc334b2",
+          categoryId: "680e930e003d3b8e731e",
+        });
+      }, 1000);
+    } catch (error) {
+      console.error("OCR processing failed:", error);
+      setValidationError("OCR processing failed. Please try again.");
+      setIsScanning(false);
+    }
+  };
+
 
   const captureButtonScale = new Animated.Value(1);
   const captureButtonOpacity = new Animated.Value(1);
@@ -172,25 +181,13 @@ const CameraScreen = () => {
     ]).start();
   };
 
-  // Handle permission states
-  if (permission === null) {
-    return (
-      <View style={styles.cameraContainer}>
-        <Text>Requesting camera permission...</Text>
-      </View>
-    );
-  }
-  if (!permission.granted) {
-    return (
-      <View style={styles.cameraContainer}>
-        <Text>No access to camera</Text>
-      </View>
-    );
-  }
-
   return (
     <View style={styles.cameraContainer}>
-      <CameraView ref={cameraRef} style={styles.preview}>
+      <CameraView
+        ref={cameraRef}
+        style={styles.preview}
+        facing="back"
+      >
         {/* Alignment Frame */}
         <View style={styles.alignmentFrame}>
           <View style={[styles.corner, styles.topLeft]} />
@@ -210,25 +207,12 @@ const CameraScreen = () => {
           >
             <Ionicons name="close" size={24} color="#FFFFFF" />
           </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.controlButton}
-            onPress={toggleFlash}
-            accessible
-            accessibilityLabel={flashOn ? "Turn off flash" : "Turn on flash"}
-            accessibilityRole="button"
-          >
-            <Ionicons
-              name={flashOn ? "flash" : "flash-off"}
-              size={24}
-              color="#FFFFFF"
-            />
-          </TouchableOpacity>
         </View>
 
         {/* Capture Button */}
         <View style={styles.controls}>
           <TouchableOpacity
-            onPress={() => {}}
+            onPress={captureImage}
             onPressIn={handleCapturePressIn}
             onPressOut={handleCapturePressOut}
             disabled={isScanning}
@@ -382,4 +366,36 @@ const styles = StyleSheet.create({
   },
   errorIcon: { marginRight: 8 },
   errorText: { color: "#DC2626", fontSize: 14, flex: 1 },
+  selectionContainer: {
+    position: "absolute",
+    top: 100,
+    left: 16,
+    right: 16,
+    flexDirection: "column",
+    backgroundColor: "rgba(0,0,0,0.5)",
+    padding: 10,
+    borderRadius: 8,
+  },
+  selectionBox: {
+    marginBottom: 10,
+  },
+  selectionLabel: {
+    color: "#FFFFFF",
+    fontSize: 16,
+    fontWeight: "bold",
+    marginBottom: 5,
+  },
+  selectionButton: {
+    padding: 8,
+    borderRadius: 5,
+    backgroundColor: "rgba(255,255,255,0.2)",
+    marginVertical: 2,
+  },
+  selectedButton: {
+    backgroundColor: "#2563EB",
+  },
+  selectionText: {
+    color: "#FFFFFF",
+    fontSize: 14,
+  },
 });

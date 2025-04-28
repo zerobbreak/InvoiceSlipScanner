@@ -7,7 +7,6 @@ interface HomeCardProps {
   icon: any;
   title: string;
   description: string;
-  sec_description: string;
 }
 
 export const homeCards: HomeCardProps[] = [
@@ -16,21 +15,18 @@ export const homeCards: HomeCardProps[] = [
     icon: "camera-outline",
     title: "Scan Slip",
     description: "Capture a new invoice or receipt",
-    sec_description: "Tap to scan a new slip",
   },
   {
     route: "/budget",
     icon: "wallet-outline",
     title: "Manage Budgets",
     description: "Create, edit and view budgets",
-    sec_description: "Tap to manage budgets",
   },
   {
     route: "/document",
     icon: "document-text-outline",
     title: "View Documents",
     description: "Access 12 stored slips",
-    sec_description: "Tap to view documents",
   },
 ];
 

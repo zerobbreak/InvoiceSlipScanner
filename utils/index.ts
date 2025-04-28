@@ -1,5 +1,4 @@
-import { createHash } from 'crypto';
-
+import * as Crypto from "expo-crypto";
 // Common patterns for extracting data
 const AMOUNT_PATTERN = /\$?\d+\.\d{2}/;
 const DATE_PATTERN = /\d{1,2}[-/]\d{1,2}[-/]\d{2,4}/;
@@ -70,5 +69,8 @@ export const extractVendor = (text: string): string => {
 
 export const computeImageHash = async (imageUri: string): Promise<string> => {
   // Simulate image hash computation (replace with actual image processing)
-  return createHash('sha256').update(imageUri).digest('hex');
+  return Crypto.digestStringAsync(
+    Crypto.CryptoDigestAlgorithm.SHA256, 
+    imageUri
+  )
 };
