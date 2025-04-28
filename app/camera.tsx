@@ -10,25 +10,22 @@ import {
   Button,
 } from "react-native";
 import {
-  Camera,
   CameraView,
   useCameraPermissions,
 } from "expo-camera";
 import { Ionicons } from "@expo/vector-icons";
 import { databases, DATABASE_ID, COLLECTION_ID, client, } from "../appwriteConfig";
-import { ID, Query, Storage } from "react-native-appwrite";
+import { ID, Query } from "react-native-appwrite";
 import { useNavigation } from "expo-router";
 import { computeImageHash, processOCR } from "@/utils";
 
 const CameraScreen = () => {
   const navigation = useNavigation();
-  const storage = new Storage(client);
   const [permission, setHasPermission] = useCameraPermissions();
   const [isScanning, setIsScanning] = useState(false);
   const [validationError, setValidationError] = useState<string | null>(null);
   const [processingStatus, setProcessingStatus] = useState("");
-  //@ts-ignore
-  const cameraRef = useRef<Camera>(null);
+  const cameraRef = useRef<CameraView>(null);
 
   // Request camera permissions
   if (!permission) {
@@ -57,7 +54,7 @@ const CameraScreen = () => {
         });
 
         setProcessingStatus("Checking for duplicates...");
-        const imageHash = await computeImageHash(data.uri);
+        const imageHash = await computeImageHash(data?.uri || "");
         const existingDoc = await databases.listDocuments(DATABASE_ID, COLLECTION_ID.DOCUMENTS, [
           Query.equal("imageHash", imageHash),
         ]);
@@ -71,7 +68,11 @@ const CameraScreen = () => {
               {
                 text: "Update",
                 onPress: async () => {
-                  await processAndNavigate(data.uri, imageHash, existingDoc.documents[0].$id);
+                  if (data?.uri) {
+                    await processAndNavigate(data.uri, imageHash, existingDoc.documents[0].$id);
+                  } else {
+                    throw new Error("Failed to capture image data.");
+                  }
                 },
               },
             ]
@@ -80,7 +81,11 @@ const CameraScreen = () => {
           return;
         }
 
-        await processAndNavigate(data.uri, imageHash, null);
+        if (data?.uri) {
+          await processAndNavigate(data.uri, imageHash, null);
+        } else {
+          throw new Error("Failed to capture image data.");
+        }
       } catch (error) {
         console.error("Capture failed:", error);
         Alert.alert("Error", "Failed to capture image. Please try again.");
@@ -105,39 +110,28 @@ const CameraScreen = () => {
         return;
       }
 
-      const ocrFile = await storage.createFile(
-        "680f67ef002610778583", 
-        ID.unique(), 
-        //@ts-ignore
-        new Blob([JSON.stringify(ocrData)], { type: "application/json"})
-      );
       const documentData = {
         imageUri,
         imageHash,
         ocrData: JSON.stringify(ocrData),
-        tags: [new Date().toISOString().split("T")[0]], // Auto-tag with date
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
         categoryId: "680e934400337dc334b2",
         budgetId: "680e930e003d3b8e731e",
       };
 
+      let docId: string;
       if (existingDocId) {
         await databases.updateDocument(DATABASE_ID, COLLECTION_ID.DOCUMENTS, existingDocId, documentData);
+        docId = existingDocId;
       } else {
-        await databases.createDocument(DATABASE_ID, COLLECTION_ID.DOCUMENTS, ID.unique(), documentData);
+        const newDoc = await databases.createDocument(DATABASE_ID, COLLECTION_ID.DOCUMENTS, ID.unique(), documentData);
+        docId = newDoc.$id;
       }
 
       setTimeout(() => {
         setIsScanning(false);
         //@ts-ignore
-        navigation.navigate("Review", {
-          imageUri,
-          ocrData,
-          imageHash,
-          existingDocId,
-          budgetId: "680e934400337dc334b2",
-          categoryId: "680e930e003d3b8e731e",
+        navigation.navigate("review", {
+          docId,
         });
       }, 1000);
     } catch (error) {
